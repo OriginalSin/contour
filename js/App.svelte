@@ -12,9 +12,17 @@
   import ImageProvider from './image-provider.js'
   
   // import src from './assets/334_256.jpg'
-  let mainNode, contOn='contOn';
+  let contOn='contOn', dropAreaElement, selectedFile;
+  let mainNode, imageNode, contentNode, fileSelect;
+  let files = $state();
+  let src = $state('');
 
-  var image;
+  const fileList = [
+    '../assets/334.jpg',
+    '../assets/334_256.jpg',
+    '../assets/svetof.png'
+  ];
+  // var image;
   let contourFinder;
   var startTime = 0;
   var maxResolution = 400;
@@ -40,66 +48,84 @@
     SAME: 8
   };
 
-//   const header = document.querySelector('header.menu');
-//   header.innerHTML = `Контур: 
-//     <input type="checkbox"  />
-// `;
 onMount(()=> {
+  const _stop = e => {
+    e.preventDefault();
+    e.stopPropagation();
+  }
 
-  image = document.getElementById('image');
-// debugger
-  var dropAreaElement = document.querySelector('.main');
+  const _handleDrop = e => {
+    _stop(e);
+    const fr = new FileReader();
+    fr.onloadend = () => { src = fr.result; };
+    fr.readAsDataURL(e.target.files && e.target.files[0] || e.dataTransfer.files[0]);
+
+  }
+  dropAreaElement.addEventListener('click', () => { fileSelect.click(); }, false);
+  dropAreaElement.addEventListener('dragover', _stop, false);
+  dropAreaElement.addEventListener('drop', _handleDrop, false);
+  fileSelect.addEventListener('change', _handleDrop, false);
+});
+
+const chkImgSize = (image) => {
+  const {width, height} = image;
+  imageWidth = width;
+  if (width > height) {
+    resultWidth = Math.min(width, maxResolution);
+    resultHeight = parseInt(resultWidth * height / width, 10);
+  } else {
+    resultHeight = Math.min(height, maxResolution);
+    resultWidth = parseInt(resultHeight * width / height, 10);
+  }
+  var polylines = document.querySelectorAll('#svg2 polyline');
+  if (polylines.length) {
+    for (var i = 0; i < polylines.length; i++) {
+      polylines[i].parentNode.removeChild(polylines[i]);
+    }
+  }
+
+  // removePrevImg();
+  imageNode = image;
+  contentNode.appendChild(imageNode);
+  return {w: resultWidth, h: resultHeight};
+
+}
+const start = () => {
   var imageProvider = new ImageProvider({
     element: dropAreaElement,
-    onImageRead: function(image) {
-      dropAreaElement.classList.add('dropped');
-      imageWidth = image.width;
-      if (image.width > image.height) {
-        resultWidth = Math.min(image.width, maxResolution);
-        resultHeight = parseInt(resultWidth * image.height / image.width, 10);
-      } else {
-        resultHeight = Math.min(image.height, maxResolution);
-        resultWidth = parseInt(resultHeight * image.width / image.height, 10);
-      }
-      contourFinder = new ContourFinder();
-      canvas = new Canvas('canvas', resultWidth, resultHeight);
-      canny = new Canny(canvas);
-      filters = new Filters(canvas);
-
-      // image.style.opacity = 0;
-
-      // delete previous images
-      var prev = document.querySelector('.container img');
-      if (prev) {
-        prev.parentNode.removeChild(prev);
-      }
-
-      var polylines = document.querySelectorAll('#svg2 polyline');
-      if (polylines.length) {
-        for (var i = 0; i < polylines.length; i++) {
-          polylines[i].parentNode.removeChild(polylines[i]);
-        }
-      }
-
-      document.querySelector('.container')
-        .appendChild(image);
-
-      canvas.loadImg(image.src, 0, 0, resultWidth, resultHeight).then(process);
-    }
+    onImageRead: prepData
   });
 
   imageProvider.init();
+  // prepData();
+}
+
+const prepData = async (image) => {
+  dropAreaElement.classList.add('dropped');
+
+  const {w, h} = chkImgSize(image);
+
+  canvas = new Canvas('canvas',  w, h);
+  await canvas.loadImg(image.src, 0, 0,  w, h);
+
+  canny = new Canny(canvas);
+  filters = new Filters(canvas);
+
+  canvas.setImgData(filters.grayscale());
+  canvas.setImgData(filters.gaussianBlur(5, 1));
+
+  canvas.setImgData(canny.gradient('sobel'));
+  canvas.setImgData(canny.nonMaximumSuppress());
+  canvas.setImgData(canny.hysteresis());
+
+  process();
+}
 
 
   function process() {
     startTime = Date.now();
 
-    canvas.setImgData(filters.grayscale());
-    canvas.setImgData(filters.gaussianBlur(5, 1));
-
-    canvas.setImgData(canny.gradient('sobel'));
-    canvas.setImgData(canny.nonMaximumSuppress());
-    canvas.setImgData(canny.hysteresis());
+    contourFinder = new ContourFinder();
 
     contourFinder.init(canvas.getCanvas());
     contourFinder.findContours();
@@ -204,22 +230,30 @@ onMount(()=> {
       // Go!
       polyline.style.strokeDashoffset = '0';
     });
-
-    // setTimeout(function() {
-    //   document.querySelector('.container img').style.opacity = 1;
-    //   document.querySelector('.container svg').style.opacity = 1;
-    // }, 2500);
   }
-// })();
-});
 
-  const onChange = (ev) => {
-    const target = ev.target;
-    const {name} = target;
+const imageOnLoad = (ev) => {
+  imageNode = ev.target;
+  prepData(imageNode);
+}
+
+const onChange = (ev) => {
+  const target = ev.target;
+  const {name} = target;
+
+  if (target.tagName.toLowerCase() === 'select') {
+    // removePrevImg();
+
+    src = target.value;
+    if (!src) dropAreaElement.classList.remove('dropped');
+
+  } else {
+    // debugger
     const cls = mainNode.classList;
     if (target.checked) cls.add(name);
     else cls.remove(name);
   }
+}
 
 </script>
 
@@ -227,19 +261,38 @@ onMount(()=> {
   <div class="card">
     Контур: <input name="contOn" type="checkbox" checked onchange={onChange} />
     Image: <input name="imgOn" type="checkbox" checked onchange={onChange} />
+    <select name="selFile" bind:value={selectedFile} onchange={onChange}>
+      <option value="">Выбрать файл</option>
+      {#each fileList as it}
+      <option value={it}>{it}</option>
+      {/each}
+    </select>
+  </div>
+  <div class="main" bind:this={dropAreaElement}>
+    <div id="droparea">Click, tap or drop image to start painting</div>
+    <input accept="image/png, image/jpeg, image/bmp, image/*" bind:files class="fileSelect" bind:this={fileSelect} type="file" />
+  </div>
+  <div class="container" bind:this={contentNode}>
+    <svg id="svg2"></svg>
+    {#if src}
+    <img onload={imageOnLoad} bind:this={imageNode} src={src} class="fromImg" alt="svetof" />
+    {/if}
 
   </div>
-  <div class="main">
-    <div id="droparea">Click, tap or drop image to start painting</div>
-  </div>
-  <div class="container">
-    <svg id="svg2" style="opacity:0"></svg>
-  </div>
+
 </main>
 
 <style>
 .card {
   color: white;
+  padding: 1rem;
+}
+.card select {
+  min-width: 10rem;
+  color: black;
+}
+.fileSelect {
+  display: none;
 }
 :global(main div.container svg),
 :global(main div.container img) {

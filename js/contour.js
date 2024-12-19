@@ -25,15 +25,18 @@ function ContourFinder() {
 	}
 
 	this.getPixel = function(x, y) {
+		const pxy = this.getPosition(x, y);
 		return {
-			r: this.pixels[this.getPosition(x, y)],
-			g: this.pixels[this.getPosition(x, y) + 1],
-			b: this.pixels[this.getPosition(x, y) + 2],
-			a: this.pixels[this.getPosition(x, y) + 3]
+			r: this.pixels[pxy],
+			g: this.pixels[pxy + 1],
+			b: this.pixels[pxy + 2],
+			a: this.pixels[pxy + 3]
 		};
 	}
 
 	this.setPixel = function(x, y, pixel) {
+		debugger
+
 		this.pixels[this.getPosition(x, y)] = pixel[0];
 		this.pixels[this.getPosition(x, y) + 1] = pixel[1];
 		this.pixels[this.getPosition(x, y) + 2] = pixel[2];
@@ -52,7 +55,7 @@ function ContourFinder() {
 			for (var x = 0; x < w; x++) {
 				var pix = this.getPixel(x, y);
 				if (pix.r === 255) {
-					// white, unseen
+					// white, unseen // Стартовая точка для контура
 
 					var points = this.followContour({ x: x, y: y });
 					if (points !== null) {
@@ -106,7 +109,8 @@ function ContourFinder() {
 			if (!this.isSeen(tmpPoint) &&
 				tmpPoint.x < w && tmpPoint.y < h &&
 				!(tmpPoint.x === point.x && tmpPoint.y === point.y) &&
-				this.getPixel(tmpPoint.x, tmpPoint.y).r === 255) {
+				this.getPixel(tmpPoint.x, tmpPoint.y).r === 255)
+			{
 				points.push(tmpPoint);
 				this.markAsSeen(tmpPoint);
 				point = {x: tmpPoint.x, y: tmpPoint.y};
@@ -117,7 +121,7 @@ function ContourFinder() {
 			}
 		}
 
-		if (points.length > 5) {
+		if (points.length > 5) {	// нашли > 5 точек вокруг 
 			return points;
 		}
 		return null;
